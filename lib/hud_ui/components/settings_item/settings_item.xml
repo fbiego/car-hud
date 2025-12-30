@@ -1,0 +1,31 @@
+<component>
+	<previews>
+		<preview width="360" style_bg_color="0x000" />
+	</previews>
+	<styles>
+		<style
+			name="style_item"
+			width="340"
+			height="70"
+			pad_all="0"
+			pad_left="10"
+			pad_right="10"
+			border_width="1"
+			text_color="0xfff"
+			border_side="bottom"
+			bg_opa="0"
+			layout="flex"
+			flex_track_place="center"
+			flex_cross_place="center"
+		/>
+
+		<style name="style_slider" width="200" />
+	</styles>
+	<api>
+		<prop name="icon" type="image" default="hud" />
+	</api>
+	<view>
+		<style name="style_item" />
+		<lv_image src="$icon" />
+	</view>
+</component>

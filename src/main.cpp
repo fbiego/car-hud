@@ -31,11 +31,213 @@
 */
 
 #include <Arduino.h>
-
 #include "main.h"
+#include <Preferences.h>
+#include "hud_ui.h"
+#include <NimBLEDevice.h>
+#include <Timber.h>
 
+#define LVGL_LOCK() xSemaphoreTakeRecursive(lvgl_mutex, portMAX_DELAY)
+#define LVGL_UNLOCK() xSemaphoreGiveRecursive(lvgl_mutex)
+
+// Locking LVGL calls to prevent concurrent access
+// This is important because LVGL is not thread-safe
+// and we need to ensure that only one task is accessing it at a time
+// This is done using a recursive mutex
+#define LVGL_EXEC(code) \
+  do                    \
+  {                     \
+    if (LVGL_LOCK())    \
+    {                   \
+      code;             \
+      LVGL_UNLOCK();    \
+    }                   \
+  } while (0)
+
+/* ---------- OBD COMMANDS (ASCII + CR) ---------- */
+const uint8_t CMD_ATZ[] = {0x41, 0x54, 0x5A, 0x0D};               // Reset (ATZ)
+const uint8_t CMD_ATE0[] = {0x41, 0x54, 0x45, 0x30, 0x0D};        // Echo off (ATE0)
+const uint8_t CMD_ATSP6[] = {0x41, 0x54, 0x53, 0x50, 0x36, 0x0D}; // Set protocol to CAN 11/500 (ATSP6)
+
+const uint8_t CMD_SPEED[] = {0x30, 0x31, 0x30, 0x44, 0x0D}; // Vehicle speed (010D)
+const uint8_t CMD_RPM[] = {0x30, 0x31, 0x30, 0x43, 0x0D};   // Engine RPM (010C)
+const uint8_t CMD_FUEL[] = {0x30, 0x31, 0x32, 0x46, 0x0D};  // Fuel Capacity (012F)
+const uint8_t CMD_TEMP[] = {0x30, 0x31, 0x30, 0x35, 0x0D};  // Coolant Temperature (0105)
+
+Preferences prefs;
+HWCDC USBSerial;
+
+/* ---------- LVGL DISPLAY ---------- */
 uint8_t lv_buffer[2][LV_BUFFER_SIZE];
+lv_obj_t *boot_screen;
+lv_obj_t *dashboard_screen;
+lv_obj_t *settings_screen;
+SemaphoreHandle_t lvgl_mutex;
 
+/* OBD UUIDs (16-bit, vendor specific) */
+static NimBLEUUID OBD_SERVICE_UUID("FFF0");
+static NimBLEUUID OBD_CHAR_UUID("FFF1");
+
+static const NimBLEAdvertisedDevice *obdDevice = nullptr;
+static NimBLEClient *client = nullptr;
+static NimBLERemoteCharacteristic *obdChar = nullptr;
+static NimBLEScan *scan = nullptr;
+
+/* ---------- HEX UTILS ---------- */
+static uint8_t hexToByte(uint8_t hi, uint8_t lo)
+{
+  hi = (hi <= '9') ? hi - '0' : hi - 'A' + 10;
+  lo = (lo <= '9') ? lo - '0' : lo - 'A' + 10;
+  return (hi << 4) | lo;
+}
+
+/* ---------- SIMPLE PARSER ---------- */
+void parseObd(const uint8_t *data, size_t len)
+{
+  if (len < 8)
+    return;
+
+  if (data[4] == 'E' && data[5] == 'R' && data[6] == 'R' && data[7] == 'O')
+  {
+    LVGL_EXEC(lv_subject_set_int(&can_error, 1));
+    return;
+  }
+  // Must start with ASCII "41"
+  if (data[0] != '4' || data[1] != '1')
+    return;
+
+  uint8_t pid = hexToByte(data[3], data[4]);
+
+  switch (pid)
+  {
+  case 0x0D: // Speed
+  {
+    uint8_t A = hexToByte(data[6], data[7]);
+    Timber.i("Speed: %u km/h\n", A);
+    LVGL_EXEC(lv_subject_set_int(&speed, (int)A));
+    break;
+  }
+
+  case 0x0C: // RPM
+  {
+    uint8_t A = hexToByte(data[6], data[7]);
+    uint8_t B = hexToByte(data[9], data[10]);
+    float rpm = ((A << 8) | B) / 4.0f;
+    Timber.i("RPM: %.0f\n", rpm);
+    LVGL_EXEC(lv_subject_set_int(&engine_rpm, (int)rpm));
+    break;
+  }
+
+  case 0x2F: // Fuel
+  {
+    uint8_t A = hexToByte(data[6], data[7]);
+    float fuel = (A * 100.0f) / 255.0f;
+    Timber.i("Fuel: %.1f %%\n", fuel);
+    int litres = fuel * 50 / 100; // Assuming 50L tank
+    LVGL_EXEC(lv_subject_set_int(&fuel_capacity, litres));
+    break;
+  }
+  case 0x05: // Coolant temp
+  {
+    uint8_t A = hexToByte(data[6], data[7]);
+    float temp = A - 40.0f;
+    Timber.i("Coolant: %.1f C\n", temp);
+    LVGL_EXEC(lv_subject_set_int(&coolant_temp, (int)temp));
+    break;
+  }
+  }
+  LVGL_EXEC(lv_subject_set_int(&can_error, 0));
+}
+
+class ClientCallbacks : public NimBLEClientCallbacks
+{
+  void onConnect(NimBLEClient *pClient) override
+  {
+    Timber.v("Connected");
+  }
+
+  void onDisconnect(NimBLEClient *pClient, int reason) override
+  {
+    Timber.v("Disconnected");
+    LVGL_EXEC(lv_subject_set_int(&con_error, 1));
+    obdChar = nullptr;
+
+    if (client)
+    {
+      NimBLEDevice::deleteClient(client);
+      client = nullptr;
+    }
+
+    if (scan)
+    {
+      scan->clearResults();
+      scan->start(0, false);
+    }
+  }
+} clientCallbacks;
+
+/* ---------- NOTIFY CALLBACK ---------- */
+void notifyCB(NimBLERemoteCharacteristic *pRemoteCharacteristic, uint8_t *data, size_t len, bool isNotify)
+{
+
+  if (isNotify)
+  {
+    USBSerial.print("Notify: ");
+    for (size_t i = 0; i < len; i++)
+      USBSerial.printf("%c", data[i]);
+    USBSerial.println();
+    parseObd(data, len);
+  }
+}
+
+/* ---------- SCAN CALLBACK ---------- */
+class ScanCB : public NimBLEScanCallbacks
+{
+  void onResult(const NimBLEAdvertisedDevice *dev) override
+  {
+    if (dev->haveServiceUUID() &&
+        dev->isAdvertisingService(OBD_SERVICE_UUID))
+    {
+      Timber.v("OBD Adapter found");
+      obdDevice = dev;
+      NimBLEDevice::getScan()->stop();
+    }
+  }
+};
+
+/* ---------- CONNECT ---------- */
+bool connectObd()
+{
+  client = NimBLEDevice::createClient();
+  client->setClientCallbacks(&clientCallbacks, false);
+  if (!client->connect(obdDevice))
+    return false;
+
+  auto service = client->getService(OBD_SERVICE_UUID);
+  if (!service)
+    return false;
+
+  obdChar = service->getCharacteristic(OBD_CHAR_UUID);
+  if (!obdChar)
+    return false;
+
+  if (obdChar->canNotify())
+    obdChar->subscribe(true, notifyCB);
+
+  Timber.v("Connected to OBD");
+  LVGL_EXEC(lv_subject_set_int(&con_error, 0));
+  return true;
+}
+
+/* ---------- WRITE ---------- */
+void obdWrite(const uint8_t *cmd, size_t len)
+{
+  if (obdChar && obdChar->canWrite())
+    obdChar->writeValue(cmd, len, false);
+}
+
+/* ---------- LVGL DISPLAY & TOUCH DRIVER ---------- */
+/*Convert rotation number to lvgl rotation type*/
 lv_display_rotation_t get_rotation(uint8_t rotation)
 {
   if (rotation > 3)
@@ -81,6 +283,7 @@ void my_disp_flush(lv_display_t *display, const lv_area_t *area, unsigned char *
   lv_display_flush_ready(display); /* tell lvgl that flushing is done */
 }
 
+/* Rounder event callback to align area to 2x2 pixels */
 void rounder_event_cb(lv_event_t *e)
 {
   lv_area_t *area = lv_event_get_invalidated_area(e);
@@ -117,17 +320,61 @@ void my_touchpad_read(lv_indev_t *indev_driver, lv_indev_data_t *data)
   }
 }
 
+/*Tick function*/
 static uint32_t my_tick(void)
 {
   return millis();
 }
 
+// void on_rotation_change(lv_observer_t *observer, lv_subject_t *subject)
+// {
+//   int32_t rotation = lv_subject_get_int(subject);
+
+// #ifdef SW_ROTATION
+//   lv_display_set_rotation(lv_display_get_default(), get_rotation(rotation));
+// #else
+//   tft.setRotation(rotation);
+//   // screen rotation has changed, invalidate to redraw
+//   lv_obj_invalidate(lv_screen_active());
+// #endif
+
+// prefs.putInt("rotation", rotation);
+
+// }
+
+void on_brightness_change(lv_observer_t *observer, lv_subject_t *subject)
+{
+  int32_t brightness = lv_subject_get_int(subject);
+  tft.setBrightness((uint8_t)brightness);
+  prefs.putInt("brightness", brightness);
+}
+
+void on_hud_change(lv_observer_t *observer, lv_subject_t *subject)
+{
+  int32_t hud = lv_subject_get_int(subject);
+  prefs.putInt("hud", hud);
+  tft.setFlipMode(hud);
+  lv_obj_invalidate(lv_screen_active());
+}
+
+void logCallback(Level level, unsigned long time, String message)
+{
+  USBSerial.print(message);
+}
+
 void setup()
 {
+
+  USBSerial.begin(115200);
+
+  Timber.setColors(true);
+  Timber.setLogCallback(logCallback);
 
 #ifdef ELECROW_C3
   elecrow_c3_init();
 #endif
+
+  prefs.begin("my-app");
 
   tft.init();
   tft.initDMA();
@@ -148,15 +395,83 @@ void setup()
   lv_indev_set_type(lv_input, LV_INDEV_TYPE_POINTER);
   lv_indev_set_read_cb(lv_input, my_touchpad_read);
 
-  lv_obj_t *label = lv_label_create(lv_screen_active());
-  lv_label_set_text(label, "Hello LVGL!" );
-  lv_obj_align(label, LV_ALIGN_CENTER, 0, 0 );
-  
+  /* Create a mutex for LVGL */
+  /* This mutex is used to protect the LVGL library from concurrent access */
+  lvgl_mutex = xSemaphoreCreateRecursiveMutex();
 
+  int rotation = prefs.getInt("rotation", 0);
+  int brightness = prefs.getInt("brightness", 128);
+  int hud = prefs.getInt("hud", 0);
+
+  tft.setBrightness((uint8_t)brightness);
+  tft.setFlipMode(hud);
+  // #ifdef SW_ROTATION
+  //   lv_display_set_rotation(lv_display, get_rotation(rotation));
+  // #else
+  //   tft.setRotation(rotation);
+  // #endif
+
+  hud_ui_init("");
+
+  // lv_subject_set_int(&settings_rotation, rotation);
+  lv_subject_set_int(&settings_brightness, brightness);
+  lv_subject_set_int(&settings_hud, hud);
+
+  // lv_subject_add_observer(&settings_rotation, on_rotation_change, NULL);
+  lv_subject_add_observer(&settings_brightness, on_brightness_change, NULL);
+  lv_subject_add_observer(&settings_hud, on_hud_change, NULL);
+
+  boot_screen = boot_create();
+  dashboard_screen = dashboard_create();
+  settings_screen = settings_create();
+
+  lv_obj_add_screen_load_event(boot_screen, LV_EVENT_SCREEN_LOADED, dashboard_screen,
+                               LV_SCREEN_LOAD_ANIM_FADE_IN, 500, 3000);
+  lv_obj_add_screen_load_event(dashboard_screen, LV_EVENT_LONG_PRESSED, settings_screen,
+                               LV_SCREEN_LOAD_ANIM_FADE_IN, 500, 0);
+  lv_obj_add_screen_load_event(settings_screen, LV_EVENT_LONG_PRESSED, dashboard_screen,
+                               LV_SCREEN_LOAD_ANIM_FADE_IN, 500, 0);
+
+  lv_screen_load(boot_screen);
+
+  /* BLE Setup */
+  NimBLEDevice::init("");
+  NimBLEDevice::setPower(ESP_PWR_LVL_P9);
+
+  scan = NimBLEDevice::getScan();
+  scan->setScanCallbacks(new ScanCB());
+  scan->setActiveScan(true);
+  scan->start(0);
 }
 
 void loop()
 {
-  lv_timer_handler(); // Update the UI-
+  LVGL_EXEC(lv_timer_handler()); // Update the UI
   delay(5);
+
+  if (obdDevice && !client)
+  {
+    if (connectObd())
+    {
+      delay(500);
+      obdWrite(CMD_ATZ, sizeof(CMD_ATZ));
+      delay(300);
+      obdWrite(CMD_ATE0, sizeof(CMD_ATE0));
+      delay(300);
+      obdWrite(CMD_ATSP6, sizeof(CMD_ATSP6));
+    }
+  }
+
+  static uint32_t last = 0;
+  if (millis() - last > 100 && obdChar)
+  {
+    last = millis();
+    obdWrite(CMD_SPEED, sizeof(CMD_SPEED));
+    delay(50);
+    obdWrite(CMD_RPM, sizeof(CMD_RPM));
+    delay(50);
+    obdWrite(CMD_FUEL, sizeof(CMD_FUEL));
+    delay(50);
+    obdWrite(CMD_TEMP, sizeof(CMD_TEMP));
+  }
 }

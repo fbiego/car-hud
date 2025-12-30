@@ -1,0 +1,47 @@
+<screen>
+	<styles>
+		<style
+			name="style_cont"
+			width="360"
+			height="300"
+			pad_all="10"
+			radius="0"
+			border_width="0"
+			bg_opa="0"
+			layout="flex"
+			flex_flow="column"
+		/>
+		<style name="style_dropdown" border_width="0" radius="5" />
+		<style name="style_slider" width="200" />
+	</styles>
+	<view>
+		<style name="style_dark" />
+
+		<lv_obj align="center">
+			<style name="style_cont" />
+			<settings_item icon="brightness" style_pad_column="50">
+				<lv_slider min_value="10" max_value="255" bind_value="settings_brightness" ext_click_area="50">
+					<style name="style_slider" />
+				</lv_slider>
+			</settings_item>
+			<settings_item>
+				<lv_label flex_grow="1" text="HUD" />
+				<lv_dropdown options="OFF&#10;X Flip&#10;Y Flip&#10;XY Flip" bind_value="settings_hud" symbol="NULL">
+					<style name="style_dropdown" />
+					<lv_dropdown-list style_pad_all="10">
+						<style name="style_dropdown" />
+					</lv_dropdown-list>
+				</lv_dropdown>
+			</settings_item>
+			<!-- <settings_item icon="rotation">
+				<lv_label text="Rotation" flex_grow="1" />
+				<lv_dropdown options="0°&#10;90°&#10;180°&#10;270°" bind_value="settings_rotation" symbol="">
+					<style name="style_dropdown" />
+					<lv_dropdown-list style_pad_all="10">
+						<style name="style_dropdown" />
+					</lv_dropdown-list>
+				</lv_dropdown>
+			</settings_item> -->
+		</lv_obj>
+	</view>
+</screen>

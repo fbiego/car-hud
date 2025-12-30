@@ -1,0 +1,8 @@
+<screen>
+	<styles />
+	<view>
+		<style name="style_dark" />
+
+		<lv_image src="subaru_logo" align="center" />
+	</view>
+</screen>

@@ -1,0 +1,56 @@
+<screen>
+	<styles>
+		<style name="style_dashboard" text_font="roboto_bold_40" />
+		<style name="style_arc" arc_width="30" arc_rounded="false" arc_color="0x0c0c0c" />
+		<style name="style_arc_indicator" arc_width="30" arc_rounded="false" arc_color="0xffffff" />
+		<style name="style_knob" bg_opa="0" />
+	</styles>
+	<view>
+		<style name="style_dark" />
+
+		<style name="style_dashboard" />
+
+		<lv_arc
+			align="top_mid"
+			width="466"
+			height="466"
+			min_value="0"
+			max_value="8000"
+			bind_value="engine_rpm"
+			clickable="false"
+		>
+			<style name="style_arc" />
+			<style name="style_arc_indicator" selector="indicator" />
+			<style name="style_knob" selector="knob" />
+		</lv_arc>
+
+		<lv_label bind_text="engine_rpm" align="top_mid" y="60" />
+
+		<lv_label bind_text="speed" align="center" style_text_font="roboto_bold_150" y="-30" />
+
+		<lv_label bind_text="coolant_temp" bind_text-fmt="%02d°C" align="bottom_mid" y="-120" />
+
+		<lv_arc
+			bg_start_angle="55"
+			bg_end_angle="125"
+			align="top_mid"
+			width="466"
+			height="466"
+			min_value="0"
+			max_value="50"
+			bind_value="fuel_capacity"
+			clickable="false"
+		>
+			<style name="style_arc" />
+			<style name="style_arc_indicator" selector="indicator" />
+			<style name="style_knob" selector="knob" />
+		</lv_arc>
+		<lv_label bind_text="fuel_capacity" bind_text-fmt="%d L" align="bottom_mid" y="-40" />
+		<lv_image src="warning" align="left_mid" x="50">
+			<bind_flag_if_eq subject="can_error" flag="hidden" ref_value="0" />
+		</lv_image>
+		<lv_image src="disconnect" align="right_mid" x="-50">
+			<bind_flag_if_eq subject="con_error" flag="hidden" ref_value="0" />
+		</lv_image>
+	</view>
+</screen>

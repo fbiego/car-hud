@@ -177,13 +177,14 @@
 #define LCD_SD2 14
 #define LCD_SD3 9
 #define LCD_RST 11
+#define LCD_EN 40
 
 #define TOUCH_SDA 41
 #define TOUCH_SCL 45
 #define TOUCH_RST 46
 #define TOUCH_IRQ 42
 
-#define LV_BUFFER_SIZE (SCREEN_WIDTH * 40)
+#define LV_BUFFER_SIZE (SCREEN_WIDTH * 20)
 
 #elif VIEWE_KNOB_15
 #define SCREEN_WIDTH 466

@@ -1,0 +1,18 @@
+list(
+  APPEND
+  PROJECT_SOURCES
+  ${CMAKE_CURRENT_LIST_DIR}/components/settings_item/settings_item_gen.c
+  ${CMAKE_CURRENT_LIST_DIR}/fonts/roboto_bold_40_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/fonts/roboto_bold_150_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/fonts/roboto_regular_24_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/hud_ui_gen.c
+  ${CMAKE_CURRENT_LIST_DIR}/hud_ui.c
+  ${CMAKE_CURRENT_LIST_DIR}/images/brightness_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/images/disconnect_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/images/hud_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/images/rotation_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/images/subaru_logo_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/images/warning_data.c
+  ${CMAKE_CURRENT_LIST_DIR}/screens/boot_gen.c
+  ${CMAKE_CURRENT_LIST_DIR}/screens/dashboard_gen.c
+  ${CMAKE_CURRENT_LIST_DIR}/screens/settings_gen.c)

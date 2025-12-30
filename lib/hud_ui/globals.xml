@@ -1,0 +1,72 @@
+<globals>
+	<api>
+		<!-- Add <enumdefs> here -->
+	</api>
+
+	<consts>
+		<!-- Add <px>, <int>, <color> etc here -->
+	</consts>
+
+	<styles>
+		<!-- Add <style> tags here -->
+		<style name="style_dark" bg_color="0x000000" bg_opa="255" text_color="0xffffff" text_font="roboto_regular_24" />
+	</styles>
+
+	<subjects>
+		<!-- Add <int>, <string>, or <float> subjects here -->
+		<int name="engine_rpm" value="0" />
+		<int name="coolant_temp" value="0" />
+		<int name="speed" value="0" />
+		<int name="fuel_capacity" value="0" />
+
+		<int name="can_error" value="0" min_value="0" max_value="1" />
+		<int name="con_error" value="1" min_value="0" max_value="1" />
+
+		<int name="settings_brightness" value="127" min_value="10" max_value="255" />
+		<int name="settings_rotation" value="0" min_value="0" max_value="3" />
+		<int name="settings_hud" value="0" min_value="0" max_value="3" />
+	</subjects>
+
+	<images>
+		<!-- Add <file> or <data> tags here -->
+		<data name="subaru_logo" src_path="images/subaru_logo.png" color_format="rgb565a8" />
+		<data name="rotation" src_path="images/rotation.png" color_format="rgb565a8" />
+		<data name="brightness" src_path="images/brightness.png" color_format="rgb565a8" />
+		<data name="hud" src_path="images/hud.png" color_format="rgb565a8" />
+		<data name="warning" src_path="images/warning.png" color_format="rgb565a8" />
+		<data name="disconnect" src_path="images/disconnected.png" color_format="rgb565a8" />
+	</images>
+
+	<fonts>
+		<!-- Add <bin> , <tiny_ttf>, <freetype> tags here -->
+		<bin
+			name="roboto_regular_24"
+			size="24"
+			src_path="fonts/Roboto-Regular.ttf"
+			bpp="4"
+			range="0x20-0x7F"
+			symbols="°"
+			as_file="false"
+		/>
+
+		<bin
+			name="roboto_bold_40"
+			size="40"
+			src_path="fonts/Roboto-Bold.ttf"
+			bpp="4"
+			range="0x20-0x7F"
+			symbols="°"
+			as_file="false"
+		/>
+
+		<bin
+			name="roboto_bold_150"
+			size="150"
+			src_path="fonts/Roboto-Bold.ttf"
+			bpp="4"
+			range="0x20-0x7F"
+			symbols="°"
+			as_file="false"
+		/>
+	</fonts>
+</globals>

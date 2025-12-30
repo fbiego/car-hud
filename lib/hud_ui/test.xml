@@ -1,0 +1,11 @@
+<test>
+	<view extends="settings" />
+	<steps>
+		<subject_set subject="coolant_temp" value="45" />
+		<subject_set subject="engine_rpm" value="2675" />
+		<subject_set subject="fuel_capacity" value="38" />
+		<subject_set subject="speed" value="64" />
+		<subject_set subject="can_error" value="1" />
+		<screenshot_compare path="screenshots/settings.png" />
+	</steps>
+</test>

@@ -38,7 +38,7 @@
 #include "displays/m5_stack.hpp"
 #elif defined(VIEWE_SMARTRING) || defined(VIEWE_KNOB_15)
 #include "displays/viewe.hpp"
-#define SW_ROTATION
+// #define SW_ROTATION
 #elif ELECROW_C3
 #include "displays/generic.hpp"
 #include "elecrow.hpp"
