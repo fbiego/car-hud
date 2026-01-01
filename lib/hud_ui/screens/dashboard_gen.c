@@ -46,9 +46,9 @@ lv_obj_t * dashboard_create(void)
         lv_style_set_text_font(&style_dashboard, roboto_bold_40);
 
         lv_style_init(&style_arc);
-        lv_style_set_arc_width(&style_arc, 30);
+        lv_style_set_arc_width(&style_arc, 3);
         lv_style_set_arc_rounded(&style_arc, false);
-        lv_style_set_arc_color(&style_arc, lv_color_hex(0x0c0c0c));
+        lv_style_set_arc_color(&style_arc, lv_color_hex(0xffffff));
 
         lv_style_init(&style_arc_indicator);
         lv_style_set_arc_width(&style_arc_indicator, 30);

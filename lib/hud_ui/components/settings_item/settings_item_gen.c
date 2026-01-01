@@ -41,14 +41,15 @@ lv_obj_t * settings_item_create(lv_obj_t * parent, const void * icon)
 
     if (!style_inited) {
         lv_style_init(&style_item);
-        lv_style_set_width(&style_item, 340);
-        lv_style_set_height(&style_item, 70);
+        lv_style_set_width(&style_item, 360);
+        lv_style_set_height(&style_item, 100);
         lv_style_set_pad_all(&style_item, 0);
         lv_style_set_pad_left(&style_item, 10);
         lv_style_set_pad_right(&style_item, 10);
         lv_style_set_border_width(&style_item, 1);
         lv_style_set_text_color(&style_item, lv_color_hex3(0xfff));
         lv_style_set_border_side(&style_item, LV_BORDER_SIDE_BOTTOM);
+        lv_style_set_radius(&style_item, 0);
         lv_style_set_bg_opa(&style_item, 0);
         lv_style_set_layout(&style_item, LV_LAYOUT_FLEX);
         lv_style_set_flex_track_place(&style_item, LV_FLEX_ALIGN_CENTER);

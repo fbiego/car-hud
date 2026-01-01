@@ -25,6 +25,7 @@
 		<int name="settings_brightness" value="127" min_value="10" max_value="255" />
 		<int name="settings_rotation" value="0" min_value="0" max_value="3" />
 		<int name="settings_hud" value="0" min_value="0" max_value="3" />
+		<int name="settings_restart" value="0" min_value="0" max_value="1" />
 	</subjects>
 
 	<images>
@@ -35,6 +36,8 @@
 		<data name="hud" src_path="images/hud.png" color_format="rgb565a8" />
 		<data name="warning" src_path="images/warning.png" color_format="rgb565a8" />
 		<data name="disconnect" src_path="images/disconnected.png" color_format="rgb565a8" />
+		<data name="back" src_path="images/back.png" color_format="rgb565a8" />
+		<data name="restart" src_path="images/restart.png" color_format="rgb565a8" />
 	</images>
 
 	<fonts>

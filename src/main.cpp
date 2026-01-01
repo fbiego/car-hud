@@ -74,6 +74,16 @@ lv_obj_t *dashboard_screen;
 lv_obj_t *settings_screen;
 SemaphoreHandle_t lvgl_mutex;
 
+bool should_restart = false;
+
+static uint32_t lastFast = 0;   // rpm
+static uint32_t lastMedium = 0; // speed
+static uint32_t lastSlow = 0;   // fuel, temp
+
+const uint32_t FAST_INTERVAL = 100;    // 0.1 seconds
+const uint32_t MEDIUM_INTERVAL = 1000; // 1 second
+const uint32_t SLOW_INTERVAL = 10000;  // 10 seconds
+
 /* OBD UUIDs (16-bit, vendor specific) */
 static NimBLEUUID OBD_SERVICE_UUID("FFF0");
 static NimBLEUUID OBD_CHAR_UUID("FFF1");
@@ -89,6 +99,44 @@ static uint8_t hexToByte(uint8_t hi, uint8_t lo)
   hi = (hi <= '9') ? hi - '0' : hi - 'A' + 10;
   lo = (lo <= '9') ? lo - '0' : lo - 'A' + 10;
   return (hi << 4) | lo;
+}
+
+/**
+ * Format byte buffer to hex String
+ *
+ * @param data    Input byte buffer
+ * @param len     Number of bytes
+ * @param prefix  Add "0x" before each byte
+ * @param space   Add space between bytes
+ * @param wrap    Bytes per line (0 = no wrap)
+ */
+String formatHexString(
+    const uint8_t *data,
+    size_t len,
+    bool prefix = true,
+    bool space = true,
+    uint8_t wrap = 0)
+{
+  const char *hex = "0123456789ABCDEF";
+  String out;
+  out.reserve(len * (prefix ? 4 : 2) + len); // avoid reallocations
+
+  for (size_t i = 0; i < len; i++)
+  {
+    if (wrap && i > 0 && (i % wrap) == 0)
+      out += '\n';
+
+    if (prefix)
+      out += "0x";
+
+    out += hex[(data[i] >> 4) & 0x0F];
+    out += hex[data[i] & 0x0F];
+
+    if (space && i < len - 1)
+      out += ' ';
+  }
+
+  return out;
 }
 
 /* ---------- SIMPLE PARSER ---------- */
@@ -149,6 +197,13 @@ void parseObd(const uint8_t *data, size_t len)
   LVGL_EXEC(lv_subject_set_int(&can_error, 0));
 }
 
+void deep_sleep_restart()
+{
+  /* Here we use deep sleep so we can detect the wakeup source to skip boot logo during startup */
+  esp_sleep_enable_timer_wakeup(1000);
+  esp_deep_sleep_start();
+}
+
 class ClientCallbacks : public NimBLEClientCallbacks
 {
   void onConnect(NimBLEClient *pClient) override
@@ -161,6 +216,12 @@ class ClientCallbacks : public NimBLEClientCallbacks
     Timber.v("Disconnected");
     LVGL_EXEC(lv_subject_set_int(&con_error, 1));
     obdChar = nullptr;
+
+    if (should_restart)
+    {
+      /* Restart on disconnect if enabled */
+      deep_sleep_restart();
+    }
 
     if (client)
     {
@@ -182,10 +243,7 @@ void notifyCB(NimBLERemoteCharacteristic *pRemoteCharacteristic, uint8_t *data, 
 
   if (isNotify)
   {
-    USBSerial.print("Notify: ");
-    for (size_t i = 0; i < len; i++)
-      USBSerial.printf("%c", data[i]);
-    USBSerial.println();
+    Timber.v(formatHexString(data, len, false));
     parseObd(data, len);
   }
 }
@@ -211,18 +269,30 @@ bool connectObd()
   client = NimBLEDevice::createClient();
   client->setClientCallbacks(&clientCallbacks, false);
   if (!client->connect(obdDevice))
+  {
+    Timber.e("Could not connect to device");
     return false;
+  }
 
   auto service = client->getService(OBD_SERVICE_UUID);
   if (!service)
+  {
+    Timber.e("OBD_SERVICE_UUID not found");
     return false;
+  }
 
   obdChar = service->getCharacteristic(OBD_CHAR_UUID);
   if (!obdChar)
+  {
+    Timber.e("OBD_CHAR_UUID not found");
     return false;
+  }
 
   if (obdChar->canNotify())
+  {
+    Timber.i("Subscribing to notifications");
     obdChar->subscribe(true, notifyCB);
+  }
 
   Timber.v("Connected to OBD");
   LVGL_EXEC(lv_subject_set_int(&con_error, 0));
@@ -357,6 +427,30 @@ void on_hud_change(lv_observer_t *observer, lv_subject_t *subject)
   lv_obj_invalidate(lv_screen_active());
 }
 
+void on_restart_change(lv_observer_t *observer, lv_subject_t *subject)
+{
+  int32_t restart = lv_subject_get_int(subject);
+  prefs.putInt("restart", restart);
+  should_restart = restart;
+}
+
+void on_restart_cb(lv_event_t *e)
+{
+  deep_sleep_restart();
+}
+
+#if LV_USE_LOG != 0
+/**
+ * Function to print lvgl logs when enabled
+ * @param level the log level
+ * @param buf the log buffer to print
+ */
+void lv_log_print(lv_log_level_t level, const char *buf)
+{
+  USBSerial.write(buf);
+}
+#endif
+
 void logCallback(Level level, unsigned long time, String message)
 {
   USBSerial.print(message);
@@ -369,6 +463,32 @@ void setup()
 
   Timber.setColors(true);
   Timber.setLogCallback(logCallback);
+
+  esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause(); // get wake up reason
+
+  bool show_boot = true;
+
+  switch (wakeup_reason)
+  {
+  case ESP_SLEEP_WAKEUP_TIMER:
+    Timber.i("Wakeup caused by timer");
+    show_boot = false;
+    break;
+  case ESP_SLEEP_WAKEUP_EXT0:
+    Timber.i("Wakeup caused by RTC alarm");
+    show_boot = true;
+    break;
+  case ESP_SLEEP_WAKEUP_EXT1:
+    Timber.i("Wakeup caused by Button press");
+    show_boot = false;
+    break;
+  case ESP_SLEEP_WAKEUP_UNDEFINED:
+    Timber.i("Wakeup was not caused by deep sleep");
+    break;
+  default:
+    Timber.i("Wakeup was not caused by deep sleep: %d", wakeup_reason);
+    break;
+  }
 
 #ifdef ELECROW_C3
   elecrow_c3_init();
@@ -384,6 +504,10 @@ void setup()
   lv_init();
 
   lv_tick_set_cb(my_tick);
+
+#if LV_USE_LOG != 0
+  lv_log_register_print_cb(lv_log_print);
+#endif
 
   static lv_display_t *lv_display = lv_display_create(SCREEN_WIDTH, SCREEN_HEIGHT);
   lv_display_set_color_format(lv_display, LV_COLOR_FORMAT_RGB565_SWAPPED);
@@ -402,6 +526,9 @@ void setup()
   int rotation = prefs.getInt("rotation", 0);
   int brightness = prefs.getInt("brightness", 128);
   int hud = prefs.getInt("hud", 0);
+  int restart = prefs.getInt("restart", 0);
+
+  should_restart = restart;
 
   tft.setBrightness((uint8_t)brightness);
   tft.setFlipMode(hud);
@@ -416,14 +543,29 @@ void setup()
   // lv_subject_set_int(&settings_rotation, rotation);
   lv_subject_set_int(&settings_brightness, brightness);
   lv_subject_set_int(&settings_hud, hud);
+  lv_subject_set_int(&settings_restart, restart);
 
   // lv_subject_add_observer(&settings_rotation, on_rotation_change, NULL);
   lv_subject_add_observer(&settings_brightness, on_brightness_change, NULL);
   lv_subject_add_observer(&settings_hud, on_hud_change, NULL);
+  lv_subject_add_observer(&settings_restart, on_restart_change, NULL);
 
   boot_screen = boot_create();
   dashboard_screen = dashboard_create();
   settings_screen = settings_create();
+
+  lv_obj_t *settings_back = lv_obj_find_by_name(settings_screen, "settings_back");
+  if (settings_back)
+  {
+    lv_obj_add_screen_load_event(settings_back, LV_EVENT_CLICKED, dashboard_screen,
+                                 LV_SCREEN_LOAD_ANIM_FADE_IN, 500, 0);
+  }
+
+  lv_obj_t *settings_restart = lv_obj_find_by_name(settings_screen, "settings_restart");
+  if (settings_restart)
+  {
+    lv_obj_add_event_cb(settings_restart, on_restart_cb, LV_EVENT_CLICKED, NULL);
+  }
 
   lv_obj_add_screen_load_event(boot_screen, LV_EVENT_SCREEN_LOADED, dashboard_screen,
                                LV_SCREEN_LOAD_ANIM_FADE_IN, 500, 3000);
@@ -432,7 +574,14 @@ void setup()
   lv_obj_add_screen_load_event(settings_screen, LV_EVENT_LONG_PRESSED, dashboard_screen,
                                LV_SCREEN_LOAD_ANIM_FADE_IN, 500, 0);
 
-  lv_screen_load(boot_screen);
+  if (show_boot)
+  {
+    lv_screen_load(boot_screen);
+  }
+  else
+  {
+    lv_screen_load(dashboard_screen);
+  }
 
   /* BLE Setup */
   NimBLEDevice::init("");
@@ -462,16 +611,37 @@ void loop()
     }
   }
 
-  static uint32_t last = 0;
-  if (millis() - last > 100 && obdChar)
+  uint32_t now = millis();
+
+  if (!obdChar)
+    return;
+
+  // Fast-changing values
+  if (now - lastFast >= FAST_INTERVAL)
   {
-    last = millis();
-    obdWrite(CMD_SPEED, sizeof(CMD_SPEED));
-    delay(50);
+    lastFast = now;
+
     obdWrite(CMD_RPM, sizeof(CMD_RPM));
-    delay(50);
+  }
+
+  // medium-changing values
+  if (now - lastMedium >= MEDIUM_INTERVAL)
+  {
+    lastMedium = now;
+
+    delay(100);
+    obdWrite(CMD_SPEED, sizeof(CMD_SPEED));
+  }
+
+  // Slow-changing values
+  if (now - lastSlow >= SLOW_INTERVAL)
+  {
+    lastSlow = now;
+
+    delay(100);
     obdWrite(CMD_FUEL, sizeof(CMD_FUEL));
-    delay(50);
+    delay(100);
     obdWrite(CMD_TEMP, sizeof(CMD_TEMP));
+    delay(100);
   }
 }

@@ -4,7 +4,8 @@
 			name="style_cont"
 			width="360"
 			height="300"
-			pad_all="10"
+			pad_all="0"
+			pad_row="0"
 			radius="0"
 			border_width="0"
 			bg_opa="0"
@@ -13,19 +14,24 @@
 		/>
 		<style name="style_dropdown" border_width="0" radius="5" />
 		<style name="style_slider" width="200" />
+		<style name="style_pressed" bg_color="0xffffff" bg_opa="100" radius="0" />
 	</styles>
 	<view>
 		<style name="style_dark" />
 
-		<lv_obj align="center">
+		<lv_obj align="center" scrollbar_mode="off">
 			<style name="style_cont" />
+			<settings_item name="settings_back" icon="back">
+				<style name="style_pressed" selector="pressed" />
+				<lv_label flex_grow="1" text="Back to Main Screen" />
+			</settings_item>
 			<settings_item icon="brightness" style_pad_column="50">
 				<lv_slider min_value="10" max_value="255" bind_value="settings_brightness" ext_click_area="50">
 					<style name="style_slider" />
 				</lv_slider>
 			</settings_item>
 			<settings_item>
-				<lv_label flex_grow="1" text="HUD" />
+				<lv_label flex_grow="1" text="HUD Mode" />
 				<lv_dropdown options="OFF&#10;X Flip&#10;Y Flip&#10;XY Flip" bind_value="settings_hud" symbol="NULL">
 					<style name="style_dropdown" />
 					<lv_dropdown-list style_pad_all="10">
@@ -42,6 +48,14 @@
 					</lv_dropdown-list>
 				</lv_dropdown>
 			</settings_item> -->
+			<settings_item icon="restart">
+				<lv_label flex_grow="1" text="Restart on Disconnect" />
+				<lv_switch bind_checked="settings_restart" />
+			</settings_item>
+			<settings_item name="settings_restart" icon="restart">
+				<style name="style_pressed" selector="pressed" />
+				<lv_label flex_grow="1" text="Restart Now" />
+			</settings_item>
 		</lv_obj>
 	</view>
 </screen>

@@ -66,6 +66,10 @@ const void * warning;
 extern const void * warning_data;
 const void * disconnect;
 extern const void * disconnect_data;
+const void * back;
+extern const void * back_data;
+const void * restart;
+extern const void * restart_data;
 
 /*----------------
  * Global styles
@@ -86,6 +90,7 @@ lv_subject_t con_error;
 lv_subject_t settings_brightness;
 lv_subject_t settings_rotation;
 lv_subject_t settings_hud;
+lv_subject_t settings_restart;
 
 /**********************
  *      MACROS
@@ -120,6 +125,8 @@ void hud_ui_init_gen(const char * asset_path)
     hud = &hud_data;
     warning = &warning_data;
     disconnect = &disconnect_data;
+    back = &back_data;
+    restart = &restart_data;
 
     /*----------------
      * Global styles
@@ -159,6 +166,9 @@ void hud_ui_init_gen(const char * asset_path)
     lv_subject_init_int(&settings_hud, 0);
     lv_subject_set_min_value_int(&settings_hud, 0);
     lv_subject_set_max_value_int(&settings_hud, 3);
+    lv_subject_init_int(&settings_restart, 0);
+    lv_subject_set_min_value_int(&settings_restart, 0);
+    lv_subject_set_max_value_int(&settings_restart, 1);
 
     /*----------------
      * Translations
@@ -182,6 +192,7 @@ void hud_ui_init_gen(const char * asset_path)
     lv_xml_register_subject(NULL, "settings_brightness", &settings_brightness);
     lv_xml_register_subject(NULL, "settings_rotation", &settings_rotation);
     lv_xml_register_subject(NULL, "settings_hud", &settings_hud);
+    lv_xml_register_subject(NULL, "settings_restart", &settings_restart);
 
     /* Register callbacks */
 #endif
@@ -196,6 +207,8 @@ void hud_ui_init_gen(const char * asset_path)
     lv_xml_register_image(NULL, "hud", hud);
     lv_xml_register_image(NULL, "warning", warning);
     lv_xml_register_image(NULL, "disconnect", disconnect);
+    lv_xml_register_image(NULL, "back", back);
+    lv_xml_register_image(NULL, "restart", restart);
 #endif
 
 #if LV_USE_XML == 0

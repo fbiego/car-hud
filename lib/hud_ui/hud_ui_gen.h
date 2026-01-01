@@ -65,6 +65,8 @@ extern const void * brightness;
 extern const void * hud;
 extern const void * warning;
 extern const void * disconnect;
+extern const void * back;
+extern const void * restart;
 
 /*----------------
  * Subjects
@@ -79,6 +81,7 @@ extern lv_subject_t con_error;
 extern lv_subject_t settings_brightness;
 extern lv_subject_t settings_rotation;
 extern lv_subject_t settings_hud;
+extern lv_subject_t settings_restart;
 
 /**********************
  * GLOBAL PROTOTYPES

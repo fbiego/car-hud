@@ -5,14 +5,15 @@
 	<styles>
 		<style
 			name="style_item"
-			width="340"
-			height="70"
+			width="360"
+			height="100"
 			pad_all="0"
 			pad_left="10"
 			pad_right="10"
 			border_width="1"
 			text_color="0xfff"
 			border_side="bottom"
+			radius="0"
 			bg_opa="0"
 			layout="flex"
 			flex_track_place="center"
